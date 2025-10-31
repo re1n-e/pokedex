@@ -6,7 +6,11 @@ import (
 	"net/http"
 )
 
-const LocationApi = "https://pokeapi.co/api/v2/location-area/"
+const PokeApi = "https://pokeapi.co/api/v2/"
+
+type Fetcher interface {
+	fetchData(apiUrl string) error
+}
 
 type Location struct {
 	Count    int       `json:"count"`
@@ -17,14 +21,29 @@ type Location struct {
 
 type Results struct {
 	Name string `json:"name"`
-	Url  string `json:"url"`
+}
+
+type Encounter struct {
+	PokemonEncounter []PokemonEncounters `json:"pokemon_encounters"`
+}
+
+type PokemonEncounters struct {
+	Pokemon Pokemon `json:"pokemon"`
+}
+
+type Pokemon struct {
+	Name string `json:"name"`
 }
 
 func LocationNew() Location {
 	return Location{}
 }
 
-func (r *Location) fetchData(apiUrl string) error {
+func EncounterNew() Encounter {
+	return Encounter{}
+}
+
+func fetchJSON(apiUrl string, target interface{}) error {
 	resp, err := http.Get(apiUrl)
 	if err != nil {
 		return fmt.Errorf("-Unable to fetch request: %v", err)
@@ -35,47 +54,35 @@ func (r *Location) fetchData(apiUrl string) error {
 		return fmt.Errorf("-Bad status code: %v", resp.StatusCode)
 	}
 
-	if err = json.NewDecoder(resp.Body).Decode(r); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(target); err != nil {
 		return fmt.Errorf("-Unable to decode JSON to struct: %v", err)
 	}
 
 	return nil
 }
 
-func (r *Location) getNext() error {
-	if r.Next == nil {
-		return r.fetchData(LocationApi)
-	}
-	return r.fetchData(*r.Next)
+func (r *Location) fetchData(apiUrl string) error {
+	return fetchJSON(apiUrl, r)
 }
 
-func (r *Location) GetNextCities() ([]string, error) {
-	if err := r.getNext(); err != nil {
-		return nil, err
-	}
-
-	var results []string
-	for _, result := range r.Results {
-		results = append(results, result.Name)
-	}
-	return results, nil
+func (e *Encounter) fetchData(apiUrl string) error {
+	return fetchJSON(apiUrl, e)
 }
 
-func (r *Location) getPrevious() error {
-	if r.Previous == nil {
-		return fmt.Errorf("-There are no previous cities")
-	}
-	return r.fetchData(*r.Previous)
+func (e *Encounter) GetPokemons(apiUrl string) error {
+	return e.fetchData(apiUrl)
 }
 
-func (r *Location) GetPreviousCities() ([]string, error) {
-	if err := r.getPrevious(); err != nil {
-		return nil, err
+func (r *Location) GetNext(nextUrl string) error {
+	if nextUrl == "" {
+		return fmt.Errorf("")
 	}
+	return r.fetchData(nextUrl)
+}
 
-	var results []string
-	for _, result := range r.Results {
-		results = append(results, result.Name)
+func (r *Location) GetPrevious(prevUrl string) error {
+	if prevUrl == "" {
+		return fmt.Errorf("")
 	}
-	return results, nil
+	return r.fetchData(prevUrl)
 }
